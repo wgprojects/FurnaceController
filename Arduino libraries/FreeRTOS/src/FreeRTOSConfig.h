@@ -84,6 +84,12 @@
  * See http://www.freertos.org/a00110.html.
  *----------------------------------------------------------*/
 
+#include "Arduino.h"
+#define configTOTAL_HEAP_SIZE (1100)
+#define configGENERATE_RUN_TIME_STATS (1)
+#define portCONFIGURE_TIMER_FOR_RUN_TIME_STATS()
+#define portGET_RUN_TIME_COUNTER_VALUE millis
+ 
 // And on to the things the same no matter the AVR type...
 #define configUSE_PREEMPTION                1
 #define configUSE_IDLE_HOOK                 1
@@ -93,7 +99,7 @@
 #define configMINIMAL_STACK_SIZE            ( ( UBaseType_t ) 85 )
 #define configIDLE_STACK_SIZE               ( ( UBaseType_t ) 192 )
 #define configMAX_TASK_NAME_LEN             ( 8 )
-#define configUSE_TRACE_FACILITY            0
+#define configUSE_TRACE_FACILITY            1
 #define configUSE_16_BIT_TICKS              1
 #define configIDLE_SHOULD_YIELD             1
 
