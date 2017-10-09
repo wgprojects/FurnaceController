@@ -26,7 +26,6 @@ COMMAND * cmdlist = {0};
 static void DebugCmdList(void)
 {
   struct COMMAND * ptr = cmdlist;
-   Serial.println("cmdlist:");
   while(ptr != NULL)
   {
     Serial.print((int)ptr, HEX);
@@ -57,6 +56,9 @@ static int AppendToList(struct COMMAND * cmd, struct COMMAND ** list)
 
   
   cmd->next = NULL;  
+
+  //DebugCmdList();
+  
   xSemaphoreGive(cmdSem);
   return 0;
 }
@@ -162,8 +164,8 @@ int ReadRegNV(int idx, struct RegEntry* entry)
 
   memcpy(entry->regname, regname, MAX_REGNAME_LEN);
   entry->regname[MAX_REGNAME_LEN] = '\0';
-//  Serial.print(entry->regname);
-//  Serial.print(F(":"));
+  Serial.print(entry->regname);
+  Serial.print(F(":"));
 
   entry->type = ((long)EEPROM.read(addr++));
 
@@ -173,7 +175,7 @@ int ReadRegNV(int idx, struct RegEntry* entry)
   entry->val |= ((long)EEPROM.read(addr++)) << 8;
   entry->val |= ((long)EEPROM.read(addr++)) << 0;
 
-//  Serial.println(entry->val, DEC);
+  Serial.println(entry->val, DEC);
   entry->baseAddr = baseAddr;
   entry->isNV = 1;
   
@@ -430,9 +432,9 @@ void RegistryInit()
   xTaskCreate(
     TaskReg
     ,  (const portCHAR *)"CLI"   // A name just for humans
-    ,  configMINIMAL_STACK_SIZE+20  // This stack size can be checked & adjusted by reading the Stack Highwater
+    ,  configMINIMAL_STACK_SIZE+50  // This stack size can be checked & adjusted by reading the Stack Highwater
     ,  NULL
-    ,  1  // Priority, with 3 (configMAX_PRIORITIES - 1) being the highest, and 0 being the lowest.
+    ,  4  // Priority, with 3 (configMAX_PRIORITIES - 1) being the highest, and 0 being the lowest.
     ,  NULL );
 
     memset(&RegRam, 0, sizeof(RegRam));
@@ -444,10 +446,11 @@ void RegistryInit()
     ListallReg(NULL, NULL);
 
     AddCommand("LISTALL", ListallReg);
+    AddCommand("FORMAT", cmdFormatNV);
     AddCommand("CPU", cmdCPU);
     AddCommand("HELP", cmdHelp);
     AddCommand("WRITE", cmdWriteReg);
-    AddCommand("FORMAT", cmdFormatNV);
+    
     
 
     

@@ -11,7 +11,7 @@
 //#include "PlayingWithFusion_MAX31856.h"
 //#include "PlayingWithFusion_MAX31856_STRUCT.h"
 #include "SPI.h"
-//#include <AccelStepper.h>
+#include <AccelStepper.h>
 #include <EEPROM.h>
 
 //#define TC0_CS  10
@@ -75,7 +75,7 @@ void setup() {
   xTaskCreate(
     TaskBlink
     ,  (const portCHAR *)"Blink"   // A name just for humans
-    ,  configMINIMAL_STACK_SIZE  // This stack size can be checked & adjusted by reading the Stack Highwater
+    ,  configMINIMAL_STACK_SIZE+50  // This stack size can be checked & adjusted by reading the Stack Highwater
     ,  NULL
     ,  2  // Priority, with 3 (configMAX_PRIORITIES - 1) being the highest, and 0 being the lowest.
     ,  NULL );
@@ -96,15 +96,17 @@ void setup() {
 //    ,  1  // Priority
 //    ,  NULL );
 //
-//  xTaskCreate(
-//    TaskRunStepper
-//    ,  (const portCHAR *)"RunStep"   // A name just for humans
-//    ,  configMINIMAL_STACK_SIZE  // This stack size can be checked & adjusted by reading the Stack Highwater
-//    ,  NULL
-//    ,  0  // Priority, with 3 (configMAX_PRIORITIES - 1) being the highest, and 0 being the lowest.
-//    ,  NULL );
+  check_mem();
+  xTaskCreate(
+    TaskRunStepper
+    ,  (const portCHAR *)"RunStep"   // A name just for humans
+    ,  configMINIMAL_STACK_SIZE+10  // This stack size can be checked & adjusted by reading the Stack Highwater
+    ,  NULL
+    ,  2  // Priority, with 3 (configMAX_PRIORITIES - 1) being the highest, and 0 being the lowest.
+    ,  NULL );
 
   check_mem();
+
   // Now the task scheduler, which takes over control of scheduling individual tasks, is automatically started.
 }
 
@@ -117,59 +119,81 @@ void loop()
 /*---------------------- Tasks ---------------------*/
 /*--------------------------------------------------*/
 
+AccelStepper s(AccelStepper::DRIVER);
+void TaskRunStepper(void *pvParameters) 
+{
+
+  TickType_t xLastWakeTime;
+
+  const TickType_t xFrequency = 5; //5 ticks is 75ms
+
+  s.setMaxSpeed(INCHES_TO_STEPS(1)); 
+  s.setAcceleration(INCHES_TO_STEPS(3));
+
+  int hnd = AddIntegerRegistryEntry("MAXD", 20, REG_CREATE_NV);
 //
-//void TaskRunStepper(void *pvParameters) 
-//{
-//  TickType_t xLastWakeTime;
-//  
-//
-//  const TickType_t xFrequency = 5; //5 ticks is 75ms
-//  
-//  AccelStepper s(AccelStepper::DRIVER);
-//  s.setMaxSpeed(INCHES_TO_STEPS(1)); 
-//  s.setAcceleration(INCHES_TO_STEPS(3));
-//
-//  //s.moveTo(
-//
-//  float oscSpeed = 0; //Steps/sec
-//  float accel = 0; //Step/sec^2
-//  
-//  float accel_mag = 1;
-//  
-//  int max_speed = 4000;
-//  
-//  xLastWakeTime = xTaskGetTickCount();
-//
-//  float ain_filt = 0;
-//  float f = 0.001;
 //  while(1)
 //  {
-//      int analog_in = analogRead(A0);
-//      ain_filt = (analog_in/1023.0 * f) + (ain_filt * (1-f));
-//      
-////      s.runToNewPosition(INCHES_TO_STEPS(3));
-////      vTaskDelayUntil( &xLastWakeTime, xFrequency );
-////      
-////      s.runToNewPosition(0);
-////      vTaskDelayUntil( &xLastWakeTime, xFrequency );
-//
-//
-//    s.moveTo(INCHES_TO_STEPS(ain_filt * 2));
-//    s.run();
-//    
+//    s.runToNewPosition(0);
+//    s.runToNewPosition(1);
 //  }
-//  
-//  
-//}
 
-#define LED_BLINK (2)
+  //s.moveTo(
+
+  float oscSpeed = 0; //Steps/sec
+  float accel = 0; //Step/sec^2
+  
+  float accel_mag = 1;
+  
+  int max_speed = 4000;
+  
+  xLastWakeTime = xTaskGetTickCount();
+
+  float ain_filt = 0;
+  float f = 0.001;
+  while(1)
+  {
+      int analog_in = analogRead(A0);
+//      Serial.println(analog_in);
+//      vTaskDelay(20);
+      float frac = (analog_in - 300) / (float)(600 - 300);
+      if(frac < 0)
+      { frac = 0; }
+      if(frac > 1)
+      { frac = 1; }
+      ain_filt = (frac * f) + (ain_filt * (1-f));
+      
+//      s.runToNewPosition(INCHES_TO_STEPS(3));
+//      vTaskDelayUntil( &xLastWakeTime, xFrequency );
+//      
+//      s.runToNewPosition(0);
+//      vTaskDelayUntil( &xLastWakeTime, xFrequency );
+
+
+  
+    analogWrite(GAUGE_FLUE_PIN, ain_filt * 255);
+
+    
+ 
+    int maxd_mm = (int)ReadIntegerRegByHandle(hnd);
+
+    s.moveTo(INCHES_TO_STEPS(ain_filt * maxd_mm / 25.4));
+    s.run();
+    
+  }
+  
+  
+}
+
+#define LED_BLINK (4)
 void TaskBlink(void *pvParameters) 
 {
   (void) pvParameters;
 
   Serial.println("BLINK");
-
-  int hnd = AddIntegerRegistryEntry("G", 100, REG_CREATE_NV);
+  check_mem();
+  
+  
 
   pinMode(LED_BLINK, OUTPUT);
 
@@ -179,8 +203,6 @@ void TaskBlink(void *pvParameters)
     vTaskDelay( 15 / portTICK_PERIOD_MS );
     digitalWrite(LED_BLINK, LOW);    
     vTaskDelay( 500 / portTICK_PERIOD_MS );
-
-    analogWrite(GAUGE_FLUE_PIN, (int)ReadIntegerRegByHandle(hnd));
   }
 }
 

@@ -3,8 +3,8 @@
 
 
 #define MAX_REGNAME_LEN (8)
-#define MAX_REG_NV (4)
-#define MAX_REG_RAM (1)
+#define MAX_REG_NV (2)
+#define MAX_REG_RAM (0)
 #define MAX_REG (MAX_REG_NV + MAX_REG_RAM)
 
 #define MAX_CMDNAME_LEN (8)
