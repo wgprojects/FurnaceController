@@ -7,9 +7,9 @@
   #error configUSE_TRACE_FACILITY required for configGENERATE_RUN_TIME_STATS
 #endif
 
-//
-//#include "PlayingWithFusion_MAX31856.h"
-//#include "PlayingWithFusion_MAX31856_STRUCT.h"
+
+#include "PlayingWithFusion_MAX31856.h"
+#include "PlayingWithFusion_MAX31856_STRUCT.h"
 #include "SPI.h"
 #include <AccelStepper.h>
 #include <EEPROM.h>
@@ -69,9 +69,10 @@ void setup() {
 //  SPI.setClockDivider(SPI_CLOCK_DIV16);   // SPI speed to SPI_CLOCK_DIV16 (1MHz)
 //  SPI.setDataMode(SPI_MODE3);             // MAX31856 is a MODE3 device
 
+
   RegistryInit();
   
-
+//
   xTaskCreate(
     TaskBlink
     ,  (const portCHAR *)"Blink"   // A name just for humans
@@ -88,21 +89,21 @@ void setup() {
 //    ,  0  // Priority, with 3 (configMAX_PRIORITIES - 1) being the highest, and 0 being the lowest.
 //    ,  NULL );
 //
-//  xTaskCreate(
-//    TaskReadThermocouple
-//    ,  (const portCHAR *) "ReadThermo"
-//    ,  configMINIMAL_STACK_SIZE  // Stack size
-//    ,  NULL
-//    ,  1  // Priority
-//    ,  NULL );
+  xTaskCreate(
+    TaskReadThermocouple
+    ,  (const portCHAR *) "Thermoc."
+    ,  configMINIMAL_STACK_SIZE  // Stack size
+    ,  NULL
+    ,  1  // Priority
+    ,  NULL );
 //
-  check_mem();
+//  check_mem();
   xTaskCreate(
     TaskRunStepper
-    ,  (const portCHAR *)"RunStep"   // A name just for humans
-    ,  configMINIMAL_STACK_SIZE+10  // This stack size can be checked & adjusted by reading the Stack Highwater
+    ,  (const portCHAR *)"Stepper"   // A name just for humans
+    ,  configMINIMAL_STACK_SIZE  // This stack size can be checked & adjusted by reading the Stack Highwater
     ,  NULL
-    ,  2  // Priority, with 3 (configMAX_PRIORITIES - 1) being the highest, and 0 being the lowest.
+    ,  0  // Priority, with 3 (configMAX_PRIORITIES - 1) being the highest, and 0 being the lowest.
     ,  NULL );
 
   check_mem();
@@ -131,6 +132,8 @@ void TaskRunStepper(void *pvParameters)
   s.setAcceleration(INCHES_TO_STEPS(3));
 
   int hnd = AddIntegerRegistryEntry("MAXD", 20, REG_CREATE_NV);
+  Serial.println("MAXD");
+  Serial.println(hnd, DEC);
 //
 //  while(1)
 //  {
@@ -171,7 +174,7 @@ void TaskRunStepper(void *pvParameters)
 
 
   
-    analogWrite(GAUGE_FLUE_PIN, ain_filt * 255);
+    //analogWrite(GAUGE_FLUE_PIN, ain_filt * 255);
 
     
  
@@ -185,7 +188,7 @@ void TaskRunStepper(void *pvParameters)
   
 }
 
-#define LED_BLINK (4)
+#define LED_BLINK (LED_BUILTIN)
 void TaskBlink(void *pvParameters) 
 {
   (void) pvParameters;
@@ -193,16 +196,18 @@ void TaskBlink(void *pvParameters)
   Serial.println("BLINK");
   check_mem();
   
-  
+  int hnd = AddIntegerRegistryEntry("ON", 200, REG_CREATE_NV);
 
   pinMode(LED_BLINK, OUTPUT);
 
   for (;;) 
   {
+    int ms = ReadIntegerRegByHandle(hnd);
+    
     digitalWrite(LED_BLINK, HIGH);  
-    vTaskDelay( 15 / portTICK_PERIOD_MS );
+    vTaskDelay( ms / portTICK_PERIOD_MS );
     digitalWrite(LED_BLINK, LOW);    
-    vTaskDelay( 500 / portTICK_PERIOD_MS );
+    vTaskDelay( (1000-ms) / portTICK_PERIOD_MS );
   }
 }
 
@@ -281,29 +286,30 @@ void DisplayTemperatureF(int gaugeID, double temp_F)
   int pin = -1;
   if(gaugeID == GAUGE_FLUE)
   {
-    GaugeFlueFrac = CalculateGaugeFrac(temp_F, 100, 300, 500, 1000, 1/5.0, 4.4/5.0);
+    GaugeFlueFrac = CalculateGaugeFrac(temp_F, 100, 300, 500, 1000, 50.0/255, 219.0/255);
     //GaugeFlueFrac = CalculateGaugeFrac(temp_F, 60, 80, 100, 110, 1/5.0, 4/5.0);
-    
+    analogWrite(GAUGE_FLUE_PIN, 255 * GaugeFlueFrac);
   }
 
 }
-//
-//void TaskReadThermocouple(void *pvParameters)  // This is a task.
-//{
-//  (void) pvParameters;
-//
-//  static struct var_max31856 TC_CH0, TC_CH1, TC_CH2, TC_CH3;
-//
+
+void TaskReadThermocouple(void *pvParameters)  // This is a task.
+{
+  (void) pvParameters;
+
+  static struct var_max31856 TC_CH0, TC_CH1, TC_CH2, TC_CH3;
+
 //  PWF_MAX31856  thermocouple0(TC0_CS, TC0_FAULT, TC0_DRDY);
 //  thermocouple0.MAX31856_config(K_TYPE, CUTOFF_60HZ, AVG_SEL_16SAMP);
-//
-//
-//
-//  int cnt = 0;
-//  for (;;)
-//  {
-//    double temp = 0;
-//    
+
+  int h1 = AddIntegerRegistryEntry("T", 128, 0);
+
+
+  int cnt = 0;
+  for (;;)
+  {
+    double temp = 0;
+    
 //    thermocouple0.MAX31856_update(&TC_CH0);        // Update MAX31856 channel 0
 //    if(TC_CH0.status)
 //    {
@@ -325,18 +331,20 @@ void DisplayTemperatureF(int gaugeID, double temp_F)
 //    {
 //      temp = TC_CH0.lin_tc_temp * 0.0078125d;
 //    }
-//
-//
-//
-//
-////    Serial.println(temp, 2);
-//    DisplayTemperatureF(GAUGE_FLUE, ToFahrenheit(temp));
-//
-//   
-//
-////      Serial.println(temp, 4);
-//
-//    
-//    vTaskDelay(10);  
-//  }
-//}
+
+
+
+
+//    Serial.println(temp, 2);
+    //DisplayTemperatureF(GAUGE_FLUE, ToFahrenheit(temp));
+    int t = ReadIntegerRegByHandle(h1);
+    //analogWrite(GAUGE_FLUE_PIN, t);
+    DisplayTemperatureF(GAUGE_FLUE, t);
+   
+
+//      Serial.println(temp, 4);
+
+    
+    vTaskDelay(10);  
+  }
+}

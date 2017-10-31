@@ -3,15 +3,15 @@
 
 
 #define MAX_REGNAME_LEN (8)
-#define MAX_REG_NV (2)
-#define MAX_REG_RAM (0)
+#define MAX_REG_NV (5)
+#define MAX_REG_RAM (5)
 #define MAX_REG (MAX_REG_NV + MAX_REG_RAM)
 
 #define MAX_CMDNAME_LEN (8)
 
 #define EEPROM_NV_BASEADDR (0)
 
-#define IDX_TO_EEPROM_ADDR(x)  (EEPROM_NV_BASEADDR + (x * (MAX_REGNAME_LEN + 5)))
+#define IDX_TO_EEPROM_ADDR(x)  (EEPROM_NV_BASEADDR + ((x) * (MAX_REGNAME_LEN + 5)))
 
 
 enum

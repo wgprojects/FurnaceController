@@ -85,7 +85,7 @@
  *----------------------------------------------------------*/
 
 #include "Arduino.h"
-#define configTOTAL_HEAP_SIZE (1100)
+#define configTOTAL_HEAP_SIZE (6000)
 #define configGENERATE_RUN_TIME_STATS (1)
 #define portCONFIGURE_TIMER_FOR_RUN_TIME_STATS()
 #define portGET_RUN_TIME_COUNTER_VALUE millis
@@ -96,8 +96,8 @@
 #define configUSE_TICK_HOOK                 0
 #define configCPU_CLOCK_HZ                  ( ( uint32_t ) F_CPU )			// This F_CPU variable set by the environment
 #define configMAX_PRIORITIES                ( ( UBaseType_t ) 4 )
-#define configMINIMAL_STACK_SIZE            ( ( UBaseType_t ) 85 )
-#define configIDLE_STACK_SIZE               ( ( UBaseType_t ) 192 )
+#define configMINIMAL_STACK_SIZE            ( ( UBaseType_t ) 120 )
+#define configIDLE_STACK_SIZE               ( ( UBaseType_t ) configMINIMAL_STACK_SIZE )
 #define configMAX_TASK_NAME_LEN             ( 8 )
 #define configUSE_TRACE_FACILITY            1
 #define configUSE_16_BIT_TICKS              1

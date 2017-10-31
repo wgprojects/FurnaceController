@@ -140,21 +140,32 @@ int ListallReg(const char* p1, const char* p2)
 int FormatNV()
 {
   int addr;
+  taskENTER_CRITICAL();
+  
   for(addr = IDX_TO_EEPROM_ADDR(0); addr < IDX_TO_EEPROM_ADDR(MAX_REG_NV+1); addr++)
   {
     EEPROM.write(addr, 0);
+    Serial.print(".");
   }
+  taskEXIT_CRITICAL();
+  Serial.println("\r\nFormat complete.");
 }
 
 int ReadRegNV(int idx, struct RegEntry* entry)
 {
   int baseAddr = IDX_TO_EEPROM_ADDR(idx);
   int addr = baseAddr;
+
+  Serial.print("ReadRegNV idx ");
+  Serial.print(idx, DEC);
+  Serial.print(", address ");
+  Serial.println(addr, DEC);
   
   char regname[MAX_REGNAME_LEN+1];
   for(int i=0; i<MAX_REGNAME_LEN; i++)
   {        
     regname[i] = EEPROM.read(addr++);
+    Serial.print(regname[i], DEC);
 
     if(i == 0 && regname[i] == 0)
     {
@@ -192,13 +203,17 @@ int WriteRegNV(struct RegEntry* entry)
   
   char regname[MAX_REGNAME_LEN+1];
 
+  taskENTER_CRITICAL();
   Serial.print(F("Writing to EEPROM addr "));
   Serial.println(addr, HEX);
+  
 
   EEPROM.write(addr++, entry->val >> 24);
   EEPROM.write(addr++, entry->val >> 16);
   EEPROM.write(addr++, entry->val >> 8);
   EEPROM.write(addr++, entry->val >> 0);
+
+  taskEXIT_CRITICAL();
 
   return REG_OK;
   
@@ -208,6 +223,7 @@ void debugRegNV(struct RegEntry* entry)
 {
   int addr = entry->baseAddr;
 
+  taskENTER_CRITICAL();
   for(int i=0; i<MAX_REGNAME_LEN; i++)
   {
     Serial.print((char)EEPROM.read(addr++));
@@ -218,18 +234,23 @@ void debugRegNV(struct RegEntry* entry)
     Serial.print(EEPROM.read(addr++), HEX);
     Serial.print(" ");
   }
+  taskEXIT_CRITICAL();
 }
 
 
 int CreateRegNV(struct RegEntry* entry)
 {
+  Serial.println("CreateRegNV");
+  Serial.println(nextRegEEPROM_idx, DEC);
+  
   int baseAddr = IDX_TO_EEPROM_ADDR(nextRegEEPROM_idx);
   entry->baseAddr = baseAddr;
   nextRegEEPROM_idx++;
 
   int addr = baseAddr;
   char * regname = entry->regname;
-  
+ 
+  taskENTER_CRITICAL();
   Serial.print(F("Writing to EEPROM addr "));
   Serial.println(addr, HEX);
 
@@ -243,21 +264,23 @@ int CreateRegNV(struct RegEntry* entry)
     else
     {
       EEPROM.write(addr++, *regname);
+      Serial.print(*regname);
       regname++;
     }
-    if(*regname == 0)
+    if(*regname == '\0')
     {
       nameEnded = 1;
     }
   }
   
-
+  
   EEPROM.write(addr++, entry->type);
   EEPROM.write(addr++, entry->val >> 24);
   EEPROM.write(addr++, entry->val >> 16);
   EEPROM.write(addr++, entry->val >> 8);
   EEPROM.write(addr++, entry->val >> 0);
 
+  taskEXIT_CRITICAL();
   return REG_OK;
   
 }
@@ -270,8 +293,9 @@ void ReadAllNV(struct RegEntry* entries)
   {
     if(REG_OK != ReadRegNV(i, &entries[i]))
     {
-      break;
+      //break;
     }
+    Serial.println("");
   }
 }
 int cmdFormatNV(const char* p1, const char* p2)
@@ -280,7 +304,7 @@ int cmdFormatNV(const char* p1, const char* p2)
 }
 int cmdWriteReg(const char* p1, const char* p2)
 {
-  int * hnd = GetHandle(p1);
+  int hnd = GetHandle(p1);
   if(hnd == NULL)
   {
     Serial.println(F("No such entry."));
@@ -288,7 +312,7 @@ int cmdWriteReg(const char* p1, const char* p2)
   }
 
   //TODO check that entry is an integer type
-  struct RegEntry * entry = (struct RegEntry *)hnd;
+  //struct RegEntry * entry = (struct RegEntry *)hnd;
   
   long val = atol(p2);
   WriteIntegerRegByHandle(hnd, val);
@@ -434,7 +458,7 @@ void RegistryInit()
     ,  (const portCHAR *)"CLI"   // A name just for humans
     ,  configMINIMAL_STACK_SIZE+50  // This stack size can be checked & adjusted by reading the Stack Highwater
     ,  NULL
-    ,  4  // Priority, with 3 (configMAX_PRIORITIES - 1) being the highest, and 0 being the lowest.
+    ,  3  // Priority, with 3 (configMAX_PRIORITIES - 1) being the highest, and 0 being the lowest.
     ,  NULL );
 
     memset(&RegRam, 0, sizeof(RegRam));
@@ -460,17 +484,17 @@ void RegistryInit()
 }
 
 
-int* GetHandle(const char* regname)
+int GetHandle(const char* regname)
 {
   int i;
   for(i=0; i<nextRegRam_idx; i++)
   {
     if(strncmp(RegRam[i].regname, regname, MAX_REGNAME_LEN) == 0)
     {
-      return (int*)&RegRam[i];
+      return (int)&RegRam[i];
     }
   }
-  return NULL;
+  return 0;
 }
 
 int HandleIsValid(int hnd)
@@ -518,17 +542,20 @@ int WriteIntegerRegByHandle(int hnd, long val)
   {
     WriteRegNV(entry); //Write Nonvolatile memory too
   }
+  return REG_OK;
 }
 int AddIntegerRegistryEntry(const char* regname, long initial, byte flags)
 { 
+   Serial.println("Add");
   if(strnlen(regname, MAX_REGNAME_LEN) > MAX_REGNAME_LEN)
   {
     return REG_ERR_MAXLEN;
   }
 
-  int* hnd = GetHandle(regname);
-  if(hnd == NULL)
+  int hnd = GetHandle(regname);
+  if(hnd == 0)
   {
+    Serial.println("Add:Create");
     struct RegEntry * entry = &RegRam[nextRegRam_idx++];
     strncpy(entry->regname, regname, MAX_REGNAME_LEN);
     entry->type = REG_INT;
@@ -538,12 +565,14 @@ int AddIntegerRegistryEntry(const char* regname, long initial, byte flags)
     {
       CreateRegNV(entry);
     }
+
     
     Serial.println((int)entry, DEC);
     return (int)entry;  
   }
   else
   {
+    Serial.println("Add:Exists");
     return (int)hnd;
   }
 }
