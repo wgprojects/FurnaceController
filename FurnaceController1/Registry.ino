@@ -111,7 +111,7 @@ void ListReg(struct RegEntry * entry)
 {
   if(entry->type == REG_INT)
   {
-    sprintf(out_line, "%s\t%ld\t%d\t%x\t", entry->regname, entry->val, entry->isNV, entry->baseAddr);
+    sprintf(out_line, "%s\t\t%ld\t%d\t%x\t", entry->regname, entry->val, entry->isNV, entry->baseAddr);
     Serial.print(out_line);
     debugRegNV(entry);
     Serial.println("");
@@ -126,7 +126,7 @@ void ListReg(struct RegEntry * entry)
 int ListallReg(const char* p1, const char* p2)
 {
   
-  sprintf(out_line, "Name\tValue\tFlags\tbaseAddr\r\n");
+  sprintf(out_line, "Name\t\tValue\tFlags\tbaseAddr\r\n");
   Serial.println(out_line);
 
   int i;
@@ -149,6 +149,7 @@ int FormatNV()
   }
   taskEXIT_CRITICAL();
   Serial.println("\r\nFormat complete.");
+  return REG_OK;
 }
 
 int ReadRegNV(int idx, struct RegEntry* entry)
@@ -201,8 +202,6 @@ int WriteRegNV(struct RegEntry* entry)
   int baseAddr = entry->baseAddr;
   int addr = baseAddr + MAX_REGNAME_LEN + 1;
   
-  char regname[MAX_REGNAME_LEN+1];
-
   taskENTER_CRITICAL();
   Serial.print(F("Writing to EEPROM addr "));
   Serial.println(addr, HEX);
@@ -301,6 +300,7 @@ void ReadAllNV(struct RegEntry* entries)
 int cmdFormatNV(const char* p1, const char* p2)
 {
   FormatNV();
+  return REG_OK;
 }
 int cmdWriteReg(const char* p1, const char* p2)
 {
@@ -431,7 +431,7 @@ int cmdCPU(const char* p1, const char* p2)
   vPortFree( pxTaskStatusArray );
   
   Serial.println("");
-  check_mem();
+  //check_mem();
 
   return 0;
 }
@@ -452,7 +452,7 @@ void check_mem()
 
 void RegistryInit()
 { 
-  check_mem();
+  //check_mem();
   xTaskCreate(
     TaskReg
     ,  (const portCHAR *)"CLI"   // A name just for humans
@@ -479,7 +479,7 @@ void RegistryInit()
 
     
     Serial.println(F("Reg inited."));
-    check_mem();
+    //check_mem();
 
 }
 
@@ -546,7 +546,8 @@ int WriteIntegerRegByHandle(int hnd, long val)
 }
 int AddIntegerRegistryEntry(const char* regname, long initial, byte flags)
 { 
-   Serial.println("Add");
+//   Serial.print("Add ");
+//   Serial.println(regname);
   if(strnlen(regname, MAX_REGNAME_LEN) > MAX_REGNAME_LEN)
   {
     return REG_ERR_MAXLEN;
@@ -555,7 +556,7 @@ int AddIntegerRegistryEntry(const char* regname, long initial, byte flags)
   int hnd = GetHandle(regname);
   if(hnd == 0)
   {
-    Serial.println("Add:Create");
+//    Serial.println("Add:Create");
     struct RegEntry * entry = &RegRam[nextRegRam_idx++];
     strncpy(entry->regname, regname, MAX_REGNAME_LEN);
     entry->type = REG_INT;
@@ -567,12 +568,12 @@ int AddIntegerRegistryEntry(const char* regname, long initial, byte flags)
     }
 
     
-    Serial.println((int)entry, DEC);
+//    Serial.println((int)entry, DEC);
     return (int)entry;  
   }
   else
   {
-    Serial.println("Add:Exists");
+//    Serial.println("Add:Exists");
     return (int)hnd;
   }
 }
@@ -634,7 +635,7 @@ int GetCommand(void)
 
 void TaskReg(void *pvParameters) 
 {
-  check_mem();
+  //check_mem();
   Serial.print(">");
   while(1)
   {

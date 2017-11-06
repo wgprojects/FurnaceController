@@ -4,7 +4,7 @@
 
 #define MAX_REGNAME_LEN (8)
 #define MAX_REG_NV (5)
-#define MAX_REG_RAM (5)
+#define MAX_REG_RAM (10)
 #define MAX_REG (MAX_REG_NV + MAX_REG_RAM)
 
 #define MAX_CMDNAME_LEN (8)
@@ -39,7 +39,8 @@ enum
 enum
 {
   REG_CREATE_NONE = 0,
-  REG_CREATE_NV = 1
+  REG_CREATE_NV = 1,
+  REG_CREATE_RONLY = 2
 };
 
 struct RegEntry

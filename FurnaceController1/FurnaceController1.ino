@@ -14,15 +14,11 @@
 #include <AccelStepper.h>
 #include <EEPROM.h>
 
-//#define TC0_CS  10
-//#define TC1_CS  9
-//#define TC2_CS  8
-//#define TC3_CS  7
-
 #define TC0_CS  7
-//#define TC1_CS  9
-//#define TC2_CS  8
-//#define TC3_CS  7
+#define TC1_CS  8
+#define TC2_CS  9
+#define TC3_CS  10
+
 
 #define TC0_FAULT 2
 #define TC0_DRDY  2
@@ -44,6 +40,63 @@
 #define GAUGE_DUCT_HOT  3
 #define GAUGE_DUCT_RET  4
 
+#define MAX_TC_NAME_LEN (8)
+int hTS[4];
+int hTT[4];
+float TT[4];
+char TN[4][MAX_TC_NAME_LEN];
+
+void printDouble( double val, unsigned int precision){
+// prints val with number of decimal places determine by precision
+// NOTE: precision is 1 followed by the number of zeros for the desired number of decimial places
+// example: printDouble( 3.1415, 100); // prints 3.14 (two decimal places)
+
+   Serial.print (int(val));  //prints the int part
+   Serial.print("."); // print the decimal point
+   unsigned int frac;
+   if(val >= 0)
+       frac = (val - int(val)) * precision;
+   else
+       frac = (int(val)- val ) * precision;
+   Serial.print(frac,DEC) ;
+} 
+
+int ThermocoupleStatusDebug(const char* p1, const char* p2)
+{
+  int i;
+  for(i=0; i<4; i++)
+  {
+    long st = ReadIntegerRegByHandle(hTS[i]);
+    Serial.print("Thermocouple ");
+    Serial.print(i, DEC);
+    Serial.print(" \"");
+    Serial.print(TN[i]);
+    Serial.print("\" ");
+      
+    if(st)
+    {
+      Serial.print(" Fault: ");
+      if(0x01 & st){Serial.print("OPEN  ");}
+      if(0x02 & st){Serial.print("Overvolt/Undervolt  ");}
+      if(0x04 & st){Serial.print("TC Low  ");}
+      if(0x08 & st){Serial.print("TC High  ");}
+      if(0x10 & st){Serial.print("CJ Low  ");}
+      if(0x20 & st){Serial.print("CJ High  ");}
+      if(0x40 & st){Serial.print("TC Range  ");}
+      if(0x80 & st){Serial.print("CJ Range  ");}
+    }
+    else
+    {
+      Serial.print(" OK: ");
+      printDouble(TT[i], 100);
+      Serial.print("C, ");
+      printDouble(ToFahrenheit(TT[i]), 100);
+      Serial.print("F");
+    }
+     Serial.println(" ");
+  }
+  return REG_OK;
+}
 
 void TaskBlink( void *pvParameters );
 void TaskReadThermocouple( void *pvParameters );
@@ -65,12 +118,20 @@ void setup() {
   //Hardware setup
 
   // setup for the the SPI library:
-//  SPI.begin();                            // begin SPI
-//  SPI.setClockDivider(SPI_CLOCK_DIV16);   // SPI speed to SPI_CLOCK_DIV16 (1MHz)
-//  SPI.setDataMode(SPI_MODE3);             // MAX31856 is a MODE3 device
+  SPI.begin();                            // begin SPI
+  SPI.setClockDivider(SPI_CLOCK_DIV16);   // SPI speed to SPI_CLOCK_DIV16 (1MHz)
+  SPI.setDataMode(SPI_MODE3);             // MAX31856 is a MODE3 device
 
 
   RegistryInit();
+
+
+  strncpy(TN[0], "Flue  ", MAX_TC_NAME_LEN);
+  strncpy(TN[1], "Return", MAX_TC_NAME_LEN);
+  strncpy(TN[2], "Duct  ", MAX_TC_NAME_LEN);
+  strncpy(TN[3], "Spare ", MAX_TC_NAME_LEN);
+  
+  AddCommand("THSTAT", ThermocoupleStatusDebug);
   
 //
   xTaskCreate(
@@ -92,7 +153,7 @@ void setup() {
   xTaskCreate(
     TaskReadThermocouple
     ,  (const portCHAR *) "Thermoc."
-    ,  configMINIMAL_STACK_SIZE  // Stack size
+    ,  configMINIMAL_STACK_SIZE+100  // Stack size
     ,  NULL
     ,  1  // Priority
     ,  NULL );
@@ -101,12 +162,12 @@ void setup() {
   xTaskCreate(
     TaskRunStepper
     ,  (const portCHAR *)"Stepper"   // A name just for humans
-    ,  configMINIMAL_STACK_SIZE  // This stack size can be checked & adjusted by reading the Stack Highwater
+    ,  configMINIMAL_STACK_SIZE+25  // This stack size can be checked & adjusted by reading the Stack Highwater
     ,  NULL
     ,  0  // Priority, with 3 (configMAX_PRIORITIES - 1) being the highest, and 0 being the lowest.
     ,  NULL );
 
-  check_mem();
+  //check_mem();
 
   // Now the task scheduler, which takes over control of scheduling individual tasks, is automatically started.
 }
@@ -194,7 +255,7 @@ void TaskBlink(void *pvParameters)
   (void) pvParameters;
 
   Serial.println("BLINK");
-  check_mem();
+  //check_mem();
   
   int hnd = AddIntegerRegistryEntry("ON", 200, REG_CREATE_NV);
 
@@ -293,16 +354,37 @@ void DisplayTemperatureF(int gaugeID, double temp_F)
 
 }
 
+
 void TaskReadThermocouple(void *pvParameters)  // This is a task.
 {
   (void) pvParameters;
+  Serial.println("THERMO.");
 
   static struct var_max31856 TC_CH0, TC_CH1, TC_CH2, TC_CH3;
 
-//  PWF_MAX31856  thermocouple0(TC0_CS, TC0_FAULT, TC0_DRDY);
-//  thermocouple0.MAX31856_config(K_TYPE, CUTOFF_60HZ, AVG_SEL_16SAMP);
+  PWF_MAX31856  thermocouple0(TC0_CS, TC0_FAULT, TC0_DRDY);
+  thermocouple0.MAX31856_config(K_TYPE, CUTOFF_60HZ, AVG_SEL_16SAMP);
+
+  PWF_MAX31856  thermocouple1(TC1_CS, TC0_FAULT, TC0_DRDY);
+  thermocouple1.MAX31856_config(K_TYPE, CUTOFF_60HZ, AVG_SEL_16SAMP);
+
+  PWF_MAX31856  thermocouple2(TC2_CS, TC0_FAULT, TC0_DRDY);
+  thermocouple2.MAX31856_config(K_TYPE, CUTOFF_60HZ, AVG_SEL_16SAMP);
+
+  PWF_MAX31856  thermocouple3(TC3_CS, TC0_FAULT, TC0_DRDY);
+  thermocouple3.MAX31856_config(K_TYPE, CUTOFF_60HZ, AVG_SEL_16SAMP);
+
+  Serial.println("Thermocouples initialized.");
 
   int h1 = AddIntegerRegistryEntry("T", 128, 0);
+  hTT[0] = AddIntegerRegistryEntry("T0", -1, REG_CREATE_RONLY);
+  hTT[1] = AddIntegerRegistryEntry("T1", -1, REG_CREATE_RONLY);
+  hTT[2] = AddIntegerRegistryEntry("T2", -1, REG_CREATE_RONLY);
+  hTT[3] = AddIntegerRegistryEntry("T3", -1, REG_CREATE_RONLY);
+  hTS[0] = AddIntegerRegistryEntry("TS0", -1, REG_CREATE_RONLY);
+  hTS[1] = AddIntegerRegistryEntry("TS1", -1, REG_CREATE_RONLY);
+  hTS[2] = AddIntegerRegistryEntry("TS2", -1, REG_CREATE_RONLY);
+  hTS[3] = AddIntegerRegistryEntry("TS3", -1, REG_CREATE_RONLY);
 
 
   int cnt = 0;
@@ -310,41 +392,63 @@ void TaskReadThermocouple(void *pvParameters)  // This is a task.
   {
     double temp = 0;
     
-//    thermocouple0.MAX31856_update(&TC_CH0);        // Update MAX31856 channel 0
-//    if(TC_CH0.status)
-//    {
-//      temp = -1;
-//
-//      Serial.print("Fault List: ");
-//      if(0x01 & TC_CH0.status){Serial.print("OPEN  ");}
-//      if(0x02 & TC_CH0.status){Serial.print("Overvolt/Undervolt  ");}
-//      if(0x04 & TC_CH0.status){Serial.print("TC Low  ");}
-//      if(0x08 & TC_CH0.status){Serial.print("TC High  ");}
-//      if(0x10 & TC_CH0.status){Serial.print("CJ Low  ");}
-//      if(0x20 & TC_CH0.status){Serial.print("CJ High  ");}
-//      if(0x40 & TC_CH0.status){Serial.print("TC Range  ");}
-//      if(0x80 & TC_CH0.status){Serial.print("CJ Range  ");}
-//      Serial.println(" ");
-//    
-//    }
-//    else
-//    {
-//      temp = TC_CH0.lin_tc_temp * 0.0078125d;
-//    }
+    thermocouple3.MAX31856_update(&TC_CH3);
+    WriteIntegerRegByHandle(hTS[3], TC_CH3.status);
+    if(TC_CH3.status)
+    {
+      TT[3] = -1;
+      WriteIntegerRegByHandle(hTT[3], -1);    
+    }
+    else
+    {
+      temp = TC_CH3.lin_tc_temp * 0.0078125d;
+      TT[3] = temp;
+      WriteIntegerRegByHandle(hTT[3], (int)(temp * 10));
+    }
 
+    thermocouple2.MAX31856_update(&TC_CH2);
+    WriteIntegerRegByHandle(hTS[2], TC_CH2.status);
+    if(TC_CH2.status)
+    {
+      TT[2] = -1;
+      WriteIntegerRegByHandle(hTT[2], -1);
+    }
+    else
+    {
+      temp = TC_CH2.lin_tc_temp * 0.0078125d;
+      TT[2] = temp;
+      WriteIntegerRegByHandle(hTT[2], (int)(temp * 10));
+    }
 
+    thermocouple1.MAX31856_update(&TC_CH1); 
+    WriteIntegerRegByHandle(hTS[1], TC_CH1.status);
+    if(TC_CH1.status)
+    {
+      TT[1] = -1;
+      WriteIntegerRegByHandle(hTT[1], -1);
+    }
+    else
+    {
+      temp = TC_CH1.lin_tc_temp * 0.0078125d;
+      TT[1] = temp;
+      WriteIntegerRegByHandle(hTT[1], (int)(temp * 10));
+    }
 
-
-//    Serial.println(temp, 2);
-    //DisplayTemperatureF(GAUGE_FLUE, ToFahrenheit(temp));
-    int t = ReadIntegerRegByHandle(h1);
-    //analogWrite(GAUGE_FLUE_PIN, t);
-    DisplayTemperatureF(GAUGE_FLUE, t);
-   
-
-//      Serial.println(temp, 4);
+    thermocouple0.MAX31856_update(&TC_CH0); 
+    WriteIntegerRegByHandle(hTS[0], TC_CH0.status);
+    if(TC_CH0.status)
+    {
+      TT[0] = -1;
+      WriteIntegerRegByHandle(hTT[0], -1);    
+    }
+    else
+    {
+      temp = TC_CH0.lin_tc_temp * 0.0078125d;
+      TT[0] = temp;
+      WriteIntegerRegByHandle(hTT[0], (int)(temp * 10));
+    }
 
     
-    vTaskDelay(10);  
+    vTaskDelay(50);  
   }
 }
